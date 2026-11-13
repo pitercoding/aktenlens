@@ -1,0 +1,116 @@
+# ---------------------------------------------------------------
+# Secrets and local environment
+# Real values live in .env (never committed); .env.example is the template.
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+
+# ---------------------------------------------------------------
+# Go (backend/)
+# ---------------------------------------------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+coverage.txt
+coverage.html
+/backend/bin/
+/backend/tmp/
+/backend/api
+/backend/worker
+# go.work is a local workspace setup, go.mod/go.sum are the source of truth
+go.work
+go.work.sum
+# Live-reload tools (air)
+.air.toml
+*-build-errors.log
+
+# ---------------------------------------------------------------
+# Node / Next.js (frontend/)
+# ---------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+/frontend/coverage/
+/frontend/.vercel
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------
+# Docker and deploy
+# Local overrides and production secrets stay out of Git.
+# ---------------------------------------------------------------
+compose.override.yaml
+docker-compose.override.yml
+deploy/.env*
+deploy/*.key
+deploy/*.pem
+# Local data volumes and backups
+/data/
+/pgdata/
+/uploads/
+*.dump
+*.sql.gz
+*.bak
+backups/
+
+# ---------------------------------------------------------------
+# Project docs
+# Architecture decision records are private (see spec, section 7).
+# ---------------------------------------------------------------
+docs/adr/
+
+# ---------------------------------------------------------------
+# Generated files and logs
+# ---------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.orig
+*.rej
+
+# ---------------------------------------------------------------
+# Editors, IDEs and OS
+# ---------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------
+# Claude Code (personal settings stay local; CLAUDE.md is committed)
+# ---------------------------------------------------------------
+.claude/settings.local.json
+.claude/projects/
