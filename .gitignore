@@ -95,11 +95,7 @@ docs/adr/
 # ---------------------------------------------------------------
 # Editors, IDEs and OS
 # ---------------------------------------------------------------
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-!.vscode/launch.json
-!.vscode/tasks.json
+.vscode/
 .idea/
 *.iml
 *.swp
