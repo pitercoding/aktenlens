@@ -1,0 +1,27 @@
+services:
+  postgres:
+    # Pinned tag: never use "latest", the database version must not change by surprise.
+    image: pgvector/pgvector:pg16
+    container_name: aktenlens-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # host:container. Bound to 127.0.0.1 so only this machine can connect.
+      # The host port is not 5432 because a local PostgreSQL may already use it.
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      # For the pg16 image the data directory is /var/lib/postgresql/data.
+      - aktenlens-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # $$ stops Compose from replacing the variable: the container's own
+      # environment (not the host's .env) is used when the check runs.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  aktenlens-postgres-data:
