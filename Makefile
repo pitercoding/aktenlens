@@ -1,0 +1,50 @@
+# Use bash on every OS, so the same Makefile works on Windows (Git Bash),
+# in GitHub Actions and on the Linux VPS.
+SHELL := bash
+
+APP_NAME := aktenlens-api
+# go.mod lives in backend/, so every Go command runs from there.
+BACKEND_DIR := backend
+# Paths below are relative to backend/ (backend/bin is in .gitignore).
+BUILD_DIR := bin
+MAIN_PATH := ./cmd/api
+
+.PHONY: all build run test test-race fmt vet clean help
+
+# Default target when running only 'make'
+all: help
+
+build: ## Compile the API binary
+	@echo "==> Compiling the project..."
+	cd $(BACKEND_DIR) && go build -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
+
+run: ## Run the API (go run, no binary left behind)
+	@echo "==> Running the API..."
+	cd $(BACKEND_DIR) && go run $(MAIN_PATH)
+
+test: ## Run all backend tests
+	@echo "==> Running tests..."
+	cd $(BACKEND_DIR) && go test ./...
+
+# -race needs a 64-bit C compiler (cgo). The old 32-bit MinGW fails, so the
+# race detector is a separate target; CI runs it on Linux.
+test-race: ## Run all backend tests with the race detector
+	@echo "==> Running tests with the race detector..."
+	cd $(BACKEND_DIR) && go test -race ./...
+
+fmt: ## Format the Go code (gofmt)
+	@echo "==> Formatting the code..."
+	cd $(BACKEND_DIR) && go fmt ./...
+
+vet: ## Look for suspicious code (go vet)
+	@echo "==> Running vet..."
+	cd $(BACKEND_DIR) && go vet ./...
+
+clean: ## Remove build artifacts
+	@echo "==> Cleaning artifacts..."
+	rm -rf $(BACKEND_DIR)/$(BUILD_DIR)
+
+# Lists every target that has a "## description" comment.
+help: ## Show the available commands
+	@echo "Available commands for $(APP_NAME):"
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
