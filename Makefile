@@ -9,7 +9,7 @@ BACKEND_DIR := backend
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/api
 
-.PHONY: all build run test test-race fmt vet clean help
+.PHONY: all build run test test-race fmt vet clean help db db-stop db-logs db-psql db-reset
 
 # Default target when running only 'make'
 all: help
@@ -48,3 +48,24 @@ clean: ## Remove build artifacts
 help: ## Show the available commands
 	@echo "Available commands for $(APP_NAME):"
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+db: ## Start PostgreSQL in Docker
+	@echo "==> Starting PostgreSQL..."
+	docker compose up -d postgres
+
+db-stop: ## Stop PostgreSQL, keeping the data
+	@echo "==> Stopping PostgreSQL..."
+	docker compose stop postgres
+
+db-logs: ## Follow the PostgreSQL logs (Ctrl+C to leave)
+	docker compose logs -f postgres
+
+# $$ keeps the variables for the container's shell, so the Makefile does not
+# need to read .env. If the terminal complains about a TTY, try "winpty make db-psql".
+db-psql: ## Open psql inside the container
+	docker compose exec postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+db-reset: ## DELETE all database data and start a fresh database
+	@echo "==> Deleting the database data and recreating it..."
+	docker compose down -v
+	$(MAKE) db
