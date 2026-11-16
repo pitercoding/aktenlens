@@ -2,6 +2,12 @@
 # in GitHub Actions and on the Linux VPS.
 SHELL := bash
 
+# Load variables from .env (the leading '-' ignores a missing file, e.g. in CI).
+-include .env
+# Export only DATABASE_URL, so goose can read it. A bare 'export' would export everything.
+export DATABASE_URL
+
+
 APP_NAME := aktenlens-api
 # go.mod lives in backend/, so every Go command runs from there.
 BACKEND_DIR := backend
@@ -9,7 +15,7 @@ BACKEND_DIR := backend
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/api
 
-.PHONY: all build run test test-race fmt vet clean help db db-stop db-logs db-psql db-reset
+.PHONY: all build run test test-race fmt vet clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
 
 # Default target when running only 'make'
 all: help
@@ -47,7 +53,7 @@ clean: ## Remove build artifacts
 # Lists every target that has a "## description" comment.
 help: ## Show the available commands
 	@echo "Available commands for $(APP_NAME):"
-	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 db: ## Start PostgreSQL in Docker
 	@echo "==> Starting PostgreSQL..."
@@ -69,3 +75,14 @@ db-reset: ## DELETE all database data and start a fresh database
 	@echo "==> Deleting the database data and recreating it..."
 	docker compose down -v
 	$(MAKE) db
+
+migrate: ## Apply all pending database migrations
+	@echo "==> Applying migrations..."
+	cd $(BACKEND_DIR) && go tool goose -dir db/migrations postgres "$$DATABASE_URL" up
+
+migrate-down: ## Roll back the last migration
+	@echo "==> Rolling back the last migration..."
+	cd $(BACKEND_DIR) && go tool goose -dir db/migrations postgres "$$DATABASE_URL" down
+
+migrate-status: ## Show which migrations were applied
+	cd $(BACKEND_DIR) && go tool goose -dir db/migrations postgres "$$DATABASE_URL" status
