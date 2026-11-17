@@ -1,0 +1,48 @@
+name: ci-backend
+
+# When to run: only if backend files (or this workflow itself) change
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+
+# Least privilege: this workflow only needs to read the code
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Every "run" step starts inside backend/, where go.mod lives
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      # Download the repo code into the runner
+      - uses: actions/checkout@v4
+
+      # Install the same Go version declared in go.mod.
+      # "uses" steps ignore working-directory, so paths start at the repo root.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # Fail if any file is not gofmt-formatted
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: go vet ./...
+
+      # -race catches data races (important for the future worker pool)
+      - name: Test
+        run: go test -race ./...
