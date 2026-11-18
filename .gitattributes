@@ -1,0 +1,6 @@
+# Keep Go sources and YAML on LF everywhere, so gofmt and CI agree on Windows
+*.go   text eol=lf
+*.mod  text eol=lf
+*.sum  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf

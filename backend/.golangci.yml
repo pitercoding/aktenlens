@@ -1,0 +1,7 @@
+version: "2"
+
+linters:
+  # Defaults already include errcheck, govet, staticcheck, unused, ineffassign.
+  # gosec adds security checks (hardcoded secrets, weak crypto, unsafe http...).
+  enable:
+    - gosec

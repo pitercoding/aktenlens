@@ -45,3 +45,36 @@ jobs:
       # -race catches data races (important for the future worker pool)
       - name: Test
         run: go test -race ./...
+        
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # Runs golangci-lint using backend/.golangci.yml
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: backend
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # "go run pkg@version" runs the tool without adding it to go.mod
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

@@ -1,6 +1,6 @@
 module github.com/pitercoding/aktenlens/backend
 
-go 1.26.2
+go 1.26.11
 
 tool github.com/pressly/goose/v3/cmd/goose
 
