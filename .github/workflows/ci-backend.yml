@@ -1,16 +1,15 @@
 name: ci-backend
 
-# When to run: only if backend files (or this workflow itself) change
+# On push to main: only if backend files (or this workflow) change. On PRs: always.
 on:
   push:
     branches: [main]
     paths:
       - "backend/**"
       - ".github/workflows/ci-backend.yml"
+  # No paths filter here: a required check must run on every PR,
+  # otherwise PRs that don't touch backend/ would wait forever.
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/ci-backend.yml"
 
 # Least privilege: this workflow only needs to read the code
 permissions:
