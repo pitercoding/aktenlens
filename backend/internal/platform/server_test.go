@@ -63,7 +63,7 @@ func TestServeStopsWhenContextIsCanceled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close() // test only: a close error is irrelevant here
 
 	cancel()
 
@@ -98,7 +98,7 @@ func TestServeFinishesInFlightRequestsBeforeStopping(t *testing.T) {
 			status <- -1
 			return
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		status <- resp.StatusCode
 	}()
 
@@ -106,8 +106,8 @@ func TestServeFinishesInFlightRequestsBeforeStopping(t *testing.T) {
 	cancel() // ask the server to stop while the request is still running
 
 	select {
-	case <-done:
-		t.Fatal("Serve returned while a request was still in flight")
+	case err := <-done:
+		t.Fatalf("Serve returned while a request was still in flight (err: %v)", err)
 	case <-time.After(200 * time.Millisecond):
 	}
 
