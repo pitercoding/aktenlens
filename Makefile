@@ -15,7 +15,7 @@ BACKEND_DIR := backend
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/api
 
-.PHONY: all build run dev test test-race fmt vet clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
+.PHONY: all build run dev test test-race fmt vet lint clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
 
 # Default target when running only 'make'
 all: help
@@ -49,6 +49,10 @@ fmt: ## Format the Go code (gofmt)
 vet: ## Look for suspicious code (go vet)
 	@echo "==> Running vet..."
 	cd $(BACKEND_DIR) && go vet ./...
+
+lint: ## Run golangci-lint (includes gosec)
+	@echo "==> Running golangci-lint..."
+	cd $(BACKEND_DIR) && golangci-lint run
 
 clean: ## Remove build artifacts
 	@echo "==> Cleaning artifacts..."
