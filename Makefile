@@ -15,7 +15,7 @@ BACKEND_DIR := backend
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/api
 
-.PHONY: all build run test test-race fmt vet clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
+.PHONY: all build run dev test test-race fmt vet clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
 
 # Default target when running only 'make'
 all: help
@@ -27,6 +27,10 @@ build: ## Compile the API binary
 run: ## Run the API (go run, no binary left behind)
 	@echo "==> Running the API..."
 	cd $(BACKEND_DIR) && go run $(MAIN_PATH)
+
+dev: ## Start everything in Docker (PostgreSQL + API)
+	@echo "==> Starting the full stack in Docker..."
+	docker compose up --build
 
 test: ## Run all backend tests
 	@echo "==> Running tests..."
