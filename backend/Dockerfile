@@ -2,7 +2,7 @@
 
 # ---------- Stage 1: build ----------
 # Same Go version as backend/go.mod, so no toolchain download at build time.
-FROM golang:1.26.11 AS build
+FROM golang:1.27.3 AS build
 
 WORKDIR /src
 
