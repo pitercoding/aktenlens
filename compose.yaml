@@ -23,5 +23,22 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    # Built from backend/Dockerfile (the build context is the backend/ folder).
+    build: ./backend
+    container_name: aktenlens-api
+    restart: unless-stopped
+    environment:
+      # Inside the Compose network the database host is the service name
+      # "postgres" and the port is the container port (5432), not the
+      # 127.0.0.1:5433 used from your own machine.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    ports:
+      # Bound to 127.0.0.1 so only this machine can reach the API.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   aktenlens-postgres-data:
