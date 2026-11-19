@@ -78,3 +78,22 @@ jobs:
       # "go run pkg@version" runs the tool without adding it to go.mod
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+  
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the same image the deploy will use. This alone proves the
+      # Dockerfile still works.
+      - name: Build the API image
+        run: docker build -t aktenlens-api:ci backend
+
+      # Fail only on CRITICAL vulnerabilities that already have a fix.
+      - name: Scan the image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: aktenlens-api:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
