@@ -1,0 +1,39 @@
+name: deploy
+
+# Runs after a merge to main, when backend files (or this workflow) change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy.yml"
+
+# packages: write lets GITHUB_TOKEN push to GHCR. Nothing else is needed.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Values go through env, never straight into the script text.
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      # Two tags: the commit hash (immutable, used to deploy and to roll back)
+      # and "latest". Image names must be lowercase, so we lowercase the owner.
+      - name: Build and push the image
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aktenlens-api"
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            -t "$IMAGE:$GITHUB_SHA" \
+            -t "$IMAGE:latest" \
+            backend
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
