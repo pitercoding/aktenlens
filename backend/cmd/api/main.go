@@ -39,14 +39,20 @@ func run() error {
 	mux := http.NewServeMux()
 	platform.RegisterRoutes(mux, pool)
 
-	srv := platform.NewServer(":8080", mux)
+	// PORT is set by hosting platforms (Render); locally it falls back to 8080.
+	addr, err := platform.ListenAddr(os.Getenv("PORT"))
+	if err != nil {
+		return err
+	}
+
+	srv := platform.NewServer(addr, mux)
 
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", srv.Addr, err)
 	}
 
-	log.Println("Aktenlens API running on http://localhost:8080")
+	log.Printf("Aktenlens API listening on %s", ln.Addr())
 
 	return platform.Serve(ctx, srv, ln)
 }
