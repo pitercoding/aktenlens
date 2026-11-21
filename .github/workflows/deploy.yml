@@ -8,14 +8,21 @@ on:
       - "backend/**"
       - ".github/workflows/deploy.yml"
 
-# packages: write lets GITHUB_TOKEN push to GHCR. Nothing else is needed.
+# One deploy at a time. A newer push waits instead of cancelling a running one.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+# Least privilege by default. Jobs that need more ask for it themselves.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # lets GITHUB_TOKEN push to GHCR
     steps:
       - uses: actions/checkout@v4
 
@@ -37,3 +44,35 @@ jobs:
             backend
           docker push "$IMAGE:$GITHUB_SHA"
           docker push "$IMAGE:latest"
+
+  # Migrations run BEFORE the new code. If this job fails, deploy never starts.
+  migrate:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Apply migrations to Neon
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: go tool goose -dir db/migrations postgres "$DATABASE_URL" up
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      # Asks Render to run this exact commit's image. The image URL must be
+      # URL-encoded, and only the tag may differ from the service's image.
+      - name: Trigger the Render deploy
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aktenlens-api:${GITHUB_SHA}"
+          ENCODED=$(jq -rn --arg u "$IMAGE" '$u|@uri')
+          curl -fsS -X POST "${HOOK_URL}&imgURL=${ENCODED}"
