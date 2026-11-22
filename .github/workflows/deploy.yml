@@ -38,6 +38,7 @@ jobs:
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aktenlens-api"
           docker build \
+            --build-arg "VERSION=${GITHUB_SHA}" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             -t "$IMAGE:$GITHUB_SHA" \
             -t "$IMAGE:latest" \
@@ -76,3 +77,29 @@ jobs:
           IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/aktenlens-api:${GITHUB_SHA}"
           ENCODED=$(jq -rn --arg u "$IMAGE" '$u|@uri')
           curl -fsS -X POST "${HOOK_URL}&imgURL=${ENCODED}"
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    env:
+      API_URL: https://aktenlens-api.onrender.com
+    steps:
+      # The old version answers 200 too, so we wait for the NEW commit hash.
+      # A deploy on the free plan can take a few minutes (build, cold start).
+      - name: Wait for the new version to be live
+        run: |
+          for i in $(seq 1 30); do
+            LIVE=$(curl -fsS --max-time 30 "$API_URL/healthz" | jq -r '.version' || true)
+            if [ "$LIVE" = "$GITHUB_SHA" ]; then
+              echo "Version $LIVE is live"
+              exit 0
+            fi
+            echo "Attempt $i: live version is '$LIVE', waiting for $GITHUB_SHA"
+            sleep 20
+          done
+          echo "The new version did not become live in time"
+          exit 1
+
+      # /readyz also checks the database; retry because Neon may be waking up.
+      - name: Check the database connection
+        run: curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$API_URL/readyz"

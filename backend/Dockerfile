@@ -13,11 +13,15 @@ RUN go mod download
 
 COPY . .
 
+# Commit hash of this build, reported by /healthz. "dev" when not provided.
+ARG VERSION=dev
+
 # CGO_ENABLED=0 -> static binary (the final image has no libc).
 # -trimpath removes local file paths from the binary.
 # -s -w strips debug info, which makes the binary smaller.
+# -X main.version=... stores the version inside the binary.
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -trimpath -ldflags="-s -w" \
+    -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/api ./cmd/api
 
 # ---------- Stage 2: runtime ----------

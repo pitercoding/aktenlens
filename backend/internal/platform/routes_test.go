@@ -30,7 +30,7 @@ func TestRegisterRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mux := http.NewServeMux()
-			RegisterRoutes(mux, stubPinger{err: tt.pingErr})
+			RegisterRoutes(mux, stubPinger{err: tt.pingErr}, "test")
 
 			recorder := httptest.NewRecorder()
 			mux.ServeHTTP(recorder, httptest.NewRequest(tt.method, tt.path, nil))

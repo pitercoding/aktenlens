@@ -57,7 +57,7 @@ func TestServeStopsWhenContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	url, done := startServe(t, ctx, NewHealthzHandler())
+	url, done := startServe(t, ctx, NewHealthzHandler("test"))
 
 	resp, err := http.Get(url + "/")
 	if err != nil {
