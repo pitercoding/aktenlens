@@ -15,7 +15,7 @@ BACKEND_DIR := backend
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/api
 
-.PHONY: all build run dev test test-race fmt vet lint clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status
+.PHONY: all build run dev test test-race fmt vet lint clean help db db-stop db-logs db-psql db-reset migrate migrate-down migrate-status sqlc
 
 # Default target when running only 'make'
 all: help
@@ -94,3 +94,9 @@ migrate-down: ## Roll back the last migration
 
 migrate-status: ## Show which migrations were applied
 	cd $(BACKEND_DIR) && go tool goose -dir db/migrations postgres "$$DATABASE_URL" status
+
+# CGO_ENABLED=0 makes sqlc use its pure-Go (WASM) SQL parser. The cgo parser
+# needs a 64-bit C compiler, which a plain Windows machine usually lacks.
+sqlc: ## Generate Go code from db/queries
+	@echo "==> Generating sqlc code..."
+	cd $(BACKEND_DIR) && CGO_ENABLED=0 go tool sqlc generate

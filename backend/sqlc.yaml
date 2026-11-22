@@ -1,0 +1,20 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    # sqlc reads our goose migrations as the schema. It understands the
+    # "-- +goose Up/Down" markers and ignores the Down sections.
+    schema: "db/migrations"
+    queries: "db/queries"
+    gen:
+      go:
+        package: "store"
+        out: "internal/store"
+        sql_package: "pgx/v5"
+        # An empty result is [] instead of nil, which becomes [] (not null) in JSON.
+        emit_empty_slices: true
+        overrides:
+          # Plain Go types instead of pgtype wrappers.
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
