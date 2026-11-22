@@ -46,12 +46,12 @@ func assertJSONResponse(
 func TestHealthzHandler(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
-	NewHealthzHandler().ServeHTTP(
+	NewHealthzHandler("abc123").ServeHTTP(
 		recorder,
 		httptest.NewRequest(http.MethodGet, "/healthz", nil),
 	)
 
-	assertJSONResponse(t, recorder, http.StatusOK, `{"status":"ok"}`)
+	assertJSONResponse(t, recorder, http.StatusOK, `{"status":"ok","version":"abc123"}`)
 }
 
 func TestReadyzHandler(t *testing.T) {

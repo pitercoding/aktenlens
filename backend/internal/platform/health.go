@@ -21,13 +21,20 @@ type healthResponse struct {
 	Status string `json:"status"`
 }
 
-// NewHealthzHandler is the liveness probe: it answers 200 {"status":"ok"}
-// as long as the process can serve requests. It must not touch the
-// database, otherwise a database outage would make the platform restart a
-// healthy API.
-func NewHealthzHandler() http.HandlerFunc {
+// healthzResponse adds the running version to the liveness answer.
+type healthzResponse struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+}
+
+// NewHealthzHandler is the liveness probe: it answers 200 with the status and
+// the running version (the commit hash set at build time), as long as the
+// process can serve requests. The version lets the deploy check that the new
+// release is the one answering. It must not touch the database, otherwise a
+// database outage would make the platform restart a healthy API.
+func NewHealthzHandler(version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+		writeJSON(w, http.StatusOK, healthzResponse{Status: "ok", Version: version})
 	}
 }
 
