@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,14 +28,30 @@ const (
 	emailConstraint = "users_email_key"
 )
 
-// Service holds the authentication use cases (register now; login and logout
-// in the next step).
+// Service holds the authentication use cases: register, login, logout and
+// authenticate.
 type Service struct {
 	pool *pgxpool.Pool
+	q    *store.Queries
+	now  func() time.Time
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+// Option customizes a Service. Tests use it to control the clock.
+type Option func(*Service)
+
+// WithClock replaces time.Now, so tests can move time without sleeping.
+func WithClock(now func() time.Time) Option {
+	return func(s *Service) { s.now = now }
+}
+
+func NewService(pool *pgxpool.Pool, opts ...Option) *Service {
+	s := &Service{pool: pool, q: store.New(pool), now: time.Now}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
 }
 
 // RegisterInput is what the signup form sends.
