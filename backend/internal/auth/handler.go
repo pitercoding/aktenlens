@@ -22,6 +22,7 @@ type authService interface {
 	Register(ctx context.Context, in RegisterInput) (Account, error)
 	Login(ctx context.Context, in LoginInput) (Session, error)
 	Logout(ctx context.Context, token string) error
+	Authenticate(ctx context.Context, token string) (Account, error)
 }
 
 // Handler exposes the auth use cases over HTTP.
@@ -41,6 +42,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/register", h.register)
 	mux.HandleFunc("POST /api/v1/auth/login", h.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", h.logout)
+
+	// The only route here that needs a session.
+	mux.Handle("GET /api/v1/me", RequireAuth(h.svc)(http.HandlerFunc(h.me)))
 }
 
 // Request and response bodies live here, not in Service: the service knows
@@ -128,6 +132,20 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	// MaxAge < 0 tells the browser to delete the cookie right away.
 	h.setSessionCookie(w, "", time.Time{}, -1)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// me returns the account of the logged-in user.
+func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
+	account, ok := AccountFrom(r.Context())
+	if !ok {
+		// Cannot happen behind RequireAuth. If someone ever registers this
+		// route without it, failing closed beats a zero-value account.
+		writeUnauthorized(w)
+
+		return
+	}
+
+	platform.WriteJSON(w, http.StatusOK, accountResponse(account))
 }
 
 // setSessionCookie is the only place that builds the session cookie, so its

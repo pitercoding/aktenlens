@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -299,6 +300,10 @@ func (failingService) Logout(context.Context, string) error {
 	return errors.New(secretDetail)
 }
 
+func (failingService) Authenticate(context.Context, string) (auth.Account, error) {
+	return auth.Account{}, errors.New(secretDetail)
+}
+
 func TestHandlersHideInternalErrors(t *testing.T) {
 	// The handlers log the real error; keep the test output clean.
 	log.SetOutput(io.Discard)
@@ -333,4 +338,103 @@ func TestHandlersHideInternalErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// getMe calls GET /api/v1/me. An empty token means no cookie at all.
+func getMe(h http.Handler, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	if token != "" {
+		req.Header.Set("Cookie", auth.SessionCookieName+"="+token)
+	}
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	return rec
+}
+
+func TestMeEndpoint(t *testing.T) {
+	t.Run("returns the logged-in account", func(t *testing.T) {
+		e := newEnv(t, true)
+		registered := decodeMap(t, postJSON(e.mux, "/api/v1/auth/register", registerBody))
+		token := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", loginBody)).Value
+
+		rec := getMe(e.mux, token)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		// Same four fields the signup returned: user, tenant, e-mail, role.
+		if got := decodeMap(t, rec); !reflect.DeepEqual(got, registered) {
+			t.Fatalf("expected %v, got %v", registered, got)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+			t.Fatalf("expected Cache-Control no-store, got %q", cc)
+		}
+	})
+
+	t.Run("without a cookie answers 401", func(t *testing.T) {
+		e := newEnv(t, true)
+
+		if rec := getMe(e.mux, ""); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("an unknown cookie answers 401", func(t *testing.T) {
+		e := newEnv(t, true)
+
+		if rec := getMe(e.mux, "not-a-real-token"); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("after logout the same cookie answers 401", func(t *testing.T) {
+		e := newEnv(t, true)
+		postJSON(e.mux, "/api/v1/auth/register", registerBody)
+		login := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", loginBody))
+
+		postJSON(e.mux, "/api/v1/auth/logout", "", login)
+
+		if rec := getMe(e.mux, login.Value); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 after logout, got %d", rec.Code)
+		}
+	})
+
+	t.Run("an expired session answers 401", func(t *testing.T) {
+		e := newEnv(t, true)
+		postJSON(e.mux, "/api/v1/auth/register", registerBody)
+		token := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", loginBody)).Value
+
+		e.clock.Advance(sessionTTL)
+
+		if rec := getMe(e.mux, token); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 after expiry, got %d", rec.Code)
+		}
+	})
+
+	// The tenant comes from the database through the session, never from the
+	// request, so two users can never see each other's data.
+	t.Run("each user sees only their own account and tenant", func(t *testing.T) {
+		e := newEnv(t, true)
+		const (
+			bobRegister = `{"tenant_name":"Bob GmbH","email":"bob@example.com","password":"correct-horse-battery"}`
+			bobLogin    = `{"email":"bob@example.com","password":"correct-horse-battery"}`
+		)
+
+		alice := decodeMap(t, postJSON(e.mux, "/api/v1/auth/register", registerBody))
+		bob := decodeMap(t, postJSON(e.mux, "/api/v1/auth/register", bobRegister))
+		aliceToken := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", loginBody)).Value
+		bobToken := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", bobLogin)).Value
+
+		gotAlice := decodeMap(t, getMe(e.mux, aliceToken))
+		gotBob := decodeMap(t, getMe(e.mux, bobToken))
+
+		if !reflect.DeepEqual(gotAlice, alice) || !reflect.DeepEqual(gotBob, bob) {
+			t.Fatalf("accounts mixed up:\nalice: %v\nbob: %v", gotAlice, gotBob)
+		}
+		if gotAlice["tenant_id"] == gotBob["tenant_id"] {
+			t.Fatal("alice and bob must be in different tenants")
+		}
+	})
 }
