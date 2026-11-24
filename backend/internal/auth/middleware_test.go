@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pitercoding/aktenlens/backend/internal/auth"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
 
 // stubAuthenticator replaces the real service: it returns what the test wants
@@ -136,4 +137,87 @@ func TestAccountFromWithoutMiddleware(t *testing.T) {
 	if _, ok := auth.AccountFrom(context.Background()); ok {
 		t.Fatal("a plain context must not contain an account")
 	}
+}
+
+func TestRequireRole(t *testing.T) {
+	const (
+		owner  = tenant.RoleOwner
+		admin  = tenant.RoleAdmin
+		member = tenant.RoleMember
+	)
+
+	// serve sends one request through RequireAuth and RequireRole, in the same
+	// order the real routes will use. The caller has the role "role".
+	serve := func(role, min tenant.Role) (rec *httptest.ResponseRecorder, reached bool) {
+		stub := &stubAuthenticator{account: auth.Account{
+			UserID:   uuid.New(),
+			TenantID: uuid.New(),
+			Email:    "alice@example.com",
+			Role:     role,
+		}}
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reached = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Cookie", auth.SessionCookieName+"=some-token")
+
+		rec = httptest.NewRecorder()
+		auth.RequireAuth(stub)(auth.RequireRole(min)(next)).ServeHTTP(rec, req)
+
+		return rec, reached
+	}
+
+	cases := []struct {
+		name    string
+		role    tenant.Role
+		min     tenant.Role
+		allowed bool
+	}{
+		{"owner on an owner route", owner, owner, true},
+		{"owner on an admin route", owner, admin, true},
+		{"admin on an admin route", admin, admin, true},
+		{"admin on a member route", admin, member, true},
+		{"member on a member route", member, member, true},
+
+		{"member on an admin route", member, admin, false},
+		{"member on an owner route", member, owner, false},
+		{"admin on an owner route", admin, owner, false},
+		{"unknown role on a member route", "superuser", member, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, reached := serve(tc.role, tc.min)
+
+			if tc.allowed {
+				if !reached || rec.Code != http.StatusOK {
+					t.Fatalf("expected access, got %d (reached=%v)", rec.Code, reached)
+				}
+
+				return
+			}
+
+			if reached || rec.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 and no handler, got %d (reached=%v)", rec.Code, reached)
+			}
+			if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+				t.Fatalf("unexpected content type %q", ct)
+			}
+		})
+	}
+
+	// No identity at all is 401 ("who are you?"), not 403 ("not allowed").
+	t.Run("without RequireAuth it answers 401", func(t *testing.T) {
+		reached := false
+		next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true })
+
+		rec := httptest.NewRecorder()
+		auth.RequireRole(member)(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		if reached || rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 and no handler, got %d (reached=%v)", rec.Code, reached)
+		}
+	})
 }

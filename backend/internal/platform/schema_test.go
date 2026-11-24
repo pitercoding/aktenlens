@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/pitercoding/aktenlens/backend/internal/platform/testdb"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
 
 // Postgres SQLSTATE codes we expect from the constraints.
@@ -107,6 +108,24 @@ func TestAuthSchema(t *testing.T) {
 			userID, tenantID)
 
 		requireSQLState(t, err, checkViolation)
+	})
+
+	// Keeps the Go constants and the SQL CHECK in sync.
+	t.Run("accepts every role defined in the tenant package", func(t *testing.T) {
+		pool := testdb.NewPool(t)
+		tenantID := insertTenant(t, pool)
+
+		roles := []tenant.Role{tenant.RoleOwner, tenant.RoleAdmin, tenant.RoleMember}
+		for _, role := range roles {
+			userID := insertUser(t, pool, string(role)+"@example.com")
+
+			_, err := pool.Exec(ctx,
+				`INSERT INTO memberships (user_id, tenant_id, role) VALUES ($1, $2, $3)`,
+				userID, tenantID, string(role))
+			if err != nil {
+				t.Fatalf("the database rejected the role %q: %v", role, err)
+			}
+		}
 	})
 
 	t.Run("a user joins a tenant only once", func(t *testing.T) {

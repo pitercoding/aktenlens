@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/pitercoding/aktenlens/backend/internal/platform"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
 
 // authenticator is the part of Service the middleware needs.
@@ -58,6 +59,34 @@ func RequireAuth(svc authenticator) func(http.Handler) http.Handler {
 				ctx := context.WithValue(r.Context(), accountKey{}, account)
 				next.ServeHTTP(w, r.WithContext(ctx))
 			}
+		})
+	}
+}
+
+// RequireRole allows the request only when the caller has at least the role
+// min (owner > admin > member). It must run AFTER RequireAuth:
+//
+//	RequireAuth(svc)(RequireRole(tenant.RoleAdmin)(handler))
+//
+// Without a logged-in user it answers 401. With one whose role is too low, 403.
+func RequireRole(min tenant.Role) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			account, ok := AccountFrom(r.Context())
+			if !ok {
+				// Used without RequireAuth: fail closed.
+				writeUnauthorized(w)
+
+				return
+			}
+
+			if !account.Role.AtLeast(min) {
+				platform.WriteProblem(w, http.StatusForbidden, "you do not have permission to do this")
+
+				return
+			}
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }

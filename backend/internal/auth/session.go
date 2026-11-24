@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pitercoding/aktenlens/backend/internal/store"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
 
 // sessionTTL is how long a login stays valid.
@@ -120,11 +121,19 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Account, erro
 		return Account{}, fmt.Errorf("get session: %w", err)
 	}
 
+	// The CHECK constraint makes an unknown role impossible. If it ever
+	// happens, the data is corrupted: fail closed, as an internal error and
+	// not as a login.
+	role, ok := tenant.ParseRole(row.Role)
+	if !ok {
+		return Account{}, fmt.Errorf("unknown membership role %q", row.Role)
+	}
+
 	return Account{
 		UserID:   row.UserID,
 		TenantID: row.TenantID,
 		Email:    row.Email,
-		Role:     row.Role,
+		Role:     role,
 	}, nil
 }
 
