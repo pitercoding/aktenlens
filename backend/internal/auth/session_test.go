@@ -237,6 +237,28 @@ func TestAuthenticate(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("an unknown role in the database is a server error, not a login", func(t *testing.T) {
+		svc, _, pool := newTestService(t)
+		register(t, svc, "alice@example.com")
+		session := login(t, svc, "alice@example.com")
+
+		// Simulate corrupted data. The CHECK constraint normally makes this
+		// impossible, so it is dropped just for this test database.
+		_, err := pool.Exec(ctx, `ALTER TABLE memberships DROP CONSTRAINT memberships_role_valid`)
+		if err != nil {
+			t.Fatalf("drop constraint: %v", err)
+		}
+		if _, err = pool.Exec(ctx, `UPDATE memberships SET role = 'superuser'`); err != nil {
+			t.Fatalf("corrupt role: %v", err)
+		}
+
+		_, err = svc.Authenticate(ctx, session.Token)
+
+		if err == nil || errors.Is(err, auth.ErrUnauthenticated) {
+			t.Fatalf("expected an internal error, got %v", err)
+		}
+	})
 }
 
 func TestLogout(t *testing.T) {

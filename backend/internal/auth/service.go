@@ -12,11 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/pitercoding/aktenlens/backend/internal/store"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
-
-// roleOwner is the role of whoever creates a tenant. It moves to the tenant
-// package when roles are modeled there (Step 11).
-const roleOwner = "owner"
 
 // ErrEmailTaken means an account with this e-mail already exists.
 var ErrEmailTaken = errors.New("auth: e-mail already registered")
@@ -66,7 +63,7 @@ type Account struct {
 	UserID   uuid.UUID
 	TenantID uuid.UUID
 	Email    string
-	Role     string
+	Role     tenant.Role
 }
 
 // Register creates a tenant, its first user and the owner membership in a
@@ -98,7 +95,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (Account, erro
 	// now run inside the transaction.
 	q := store.New(tx)
 
-	tenant, err := q.CreateTenant(ctx, in.TenantName)
+	newTenant, err := q.CreateTenant(ctx, in.TenantName)
 	if err != nil {
 		return Account{}, fmt.Errorf("create tenant: %w", err)
 	}
@@ -119,8 +116,8 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (Account, erro
 
 	err = q.CreateMembership(ctx, store.CreateMembershipParams{
 		UserID:   user.ID,
-		TenantID: tenant.ID,
-		Role:     roleOwner,
+		TenantID: newTenant.ID,
+		Role:     string(tenant.RoleOwner),
 	})
 	if err != nil {
 		return Account{}, fmt.Errorf("create membership: %w", err)
@@ -132,9 +129,9 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (Account, erro
 
 	return Account{
 		UserID:   user.ID,
-		TenantID: tenant.ID,
+		TenantID: newTenant.ID,
 		Email:    user.Email,
-		Role:     roleOwner,
+		Role:     tenant.RoleOwner,
 	}, nil
 }
 

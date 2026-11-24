@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pitercoding/aktenlens/backend/internal/platform"
+	"github.com/pitercoding/aktenlens/backend/internal/tenant"
 )
 
 // SessionCookieName is the cookie that carries the session token. The auth
@@ -61,10 +62,10 @@ type loginRequest struct {
 }
 
 type accountResponse struct {
-	UserID   uuid.UUID `json:"user_id"`
-	TenantID uuid.UUID `json:"tenant_id"`
-	Email    string    `json:"email"`
-	Role     string    `json:"role"`
+	UserID   uuid.UUID   `json:"user_id"`
+	TenantID uuid.UUID   `json:"tenant_id"`
+	Email    string      `json:"email"`
+	Role     tenant.Role `json:"role"`
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
