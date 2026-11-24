@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/pitercoding/aktenlens/backend/internal/auth"
+	"github.com/pitercoding/aktenlens/backend/internal/platform"
 )
 
 const (
@@ -435,6 +436,80 @@ func TestMeEndpoint(t *testing.T) {
 		}
 		if gotAlice["tenant_id"] == gotBob["tenant_id"] {
 			t.Fatal("alice and bob must be in different tenants")
+		}
+	})
+}
+
+// The protection is a separate middleware, so these tests prove that the real
+// auth routes are covered when it wraps them (as main.go will do).
+func TestAuthRoutesBehindCSRFProtection(t *testing.T) {
+	// send makes a POST as the browser would. site is the Sec-Fetch-Site
+	// value ("" means the header is absent).
+	send := func(h http.Handler, site, path, body, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		if token != "" {
+			req.Header.Set("Cookie", auth.SessionCookieName+"="+token)
+		}
+
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	protected := func(t *testing.T) (http.Handler, env) {
+		t.Helper()
+
+		e := newEnv(t, true)
+		protect, err := platform.CSRFProtection()
+		if err != nil {
+			t.Fatalf("create protection: %v", err)
+		}
+
+		return protect(e.mux), e
+	}
+
+	t.Run("a cross-site logout does not end the session", func(t *testing.T) {
+		handler, e := protected(t)
+		postJSON(e.mux, "/api/v1/auth/register", registerBody)
+		token := sessionCookie(postJSON(e.mux, "/api/v1/auth/login", loginBody)).Value
+
+		rec := send(handler, "cross-site", "/api/v1/auth/logout", "", token)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", rec.Code)
+		}
+		if _, err := e.svc.Authenticate(context.Background(), token); err != nil {
+			t.Fatalf("the session must survive a blocked logout, got %v", err)
+		}
+	})
+
+	t.Run("a cross-site login is blocked and sets no cookie", func(t *testing.T) {
+		handler, e := protected(t)
+		postJSON(e.mux, "/api/v1/auth/register", registerBody)
+
+		rec := send(handler, "cross-site", "/api/v1/auth/login", loginBody, "")
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d", rec.Code)
+		}
+		if sessionCookie(rec) != nil {
+			t.Fatal("a blocked login must not set a cookie")
+		}
+	})
+
+	t.Run("the same requests work from our own origin", func(t *testing.T) {
+		handler, e := protected(t)
+		postJSON(e.mux, "/api/v1/auth/register", registerBody)
+
+		rec := send(handler, "same-origin", "/api/v1/auth/login", loginBody, "")
+
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d", rec.Code)
 		}
 	})
 }
