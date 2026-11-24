@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -308,6 +307,9 @@ func TestHandlersHideInternalErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	auth.NewHandler(failingService{}, true).RegisterRoutes(mux)
 
+	// A cookie sent BY the client: Secure and HttpOnly only matter in responses.
+	clientCookie := &http.Cookie{Name: auth.SessionCookieName, Value: "some-token"} //nolint:gosec // G124: request cookie
+
 	cases := []struct {
 		path    string
 		body    string
@@ -315,7 +317,7 @@ func TestHandlersHideInternalErrors(t *testing.T) {
 	}{
 		{"/api/v1/auth/register", registerBody, nil},
 		{"/api/v1/auth/login", loginBody, nil},
-		{"/api/v1/auth/logout", "", []*http.Cookie{{Name: auth.SessionCookieName, Value: "some-token"}}},
+		{"/api/v1/auth/logout", "", []*http.Cookie{clientCookie}},
 	}
 
 	for _, tc := range cases {
@@ -332,6 +334,3 @@ func TestHandlersHideInternalErrors(t *testing.T) {
 		})
 	}
 }
-
-// keep the time import used even if sessionTTL moves elsewhere.
-var _ = time.Second

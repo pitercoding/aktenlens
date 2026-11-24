@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -68,11 +69,9 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := h.svc.Register(r.Context(), RegisterInput{
-		TenantName: req.TenantName,
-		Email:      req.Email,
-		Password:   req.Password,
-	})
+	// Converting (instead of copying field by field) makes the compiler check
+	// that both structs keep exactly the same fields. JSON tags are ignored.
+	account, err := h.svc.Register(r.Context(), RegisterInput(req))
 
 	var validationErr *ValidationError
 
@@ -88,12 +87,9 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		w.Header().Set("Cache-Control", "no-store")
-		platform.WriteJSON(w, http.StatusCreated, accountResponse{
-			UserID:   account.UserID,
-			TenantID: account.TenantID,
-			Email:    account.Email,
-			Role:     account.Role,
-		})
+		// Same idea: if Account ever gains a field (say, a password hash),
+		// this line stops compiling instead of leaking it through the API.
+		platform.WriteJSON(w, http.StatusCreated, accountResponse(account))
 	}
 }
 
@@ -103,10 +99,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.svc.Login(r.Context(), LoginInput{
-		Email:    req.Email,
-		Password: req.Password,
-	})
+	session, err := h.svc.Login(r.Context(), LoginInput(req))
 
 	switch {
 	case errors.Is(err, ErrInvalidCredentials):
@@ -116,10 +109,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "login", err)
 
 	default:
-		cookie := h.newCookie(session.Token)
-		cookie.Expires = session.ExpiresAt
-
-		http.SetCookie(w, cookie)
+		h.setSessionCookie(w, session.Token, session.ExpiresAt, 0)
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -136,26 +126,29 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// MaxAge < 0 tells the browser to delete the cookie right away.
-	cleared := h.newCookie("")
-	cleared.MaxAge = -1
-
-	http.SetCookie(w, cleared)
+	h.setSessionCookie(w, "", time.Time{}, -1)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// newCookie builds the session cookie with every protection on:
+// setSessionCookie is the only place that builds the session cookie, so its
+// protections cannot be forgotten in one of the handlers:
 //   - HttpOnly: JavaScript cannot read it, so an XSS cannot steal the session.
 //   - Secure: only sent over HTTPS (off only for local HTTP development).
 //   - SameSite=Lax: not sent on cross-site POSTs, the base of CSRF protection.
-func (h *Handler) newCookie(value string) *http.Cookie {
-	return &http.Cookie{
+//
+// A zero expires and zero maxAge make a session cookie; maxAge < 0 deletes it.
+func (h *Handler) setSessionCookie(w http.ResponseWriter, value string, expires time.Time, maxAge int) {
+	//nolint:gosec // G124: Secure is configurable, false only for local HTTP development.
+	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    value,
 		Path:     "/",
+		Expires:  expires,
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   h.secureCookies,
 		SameSite: http.SameSiteLaxMode,
-	}
+	})
 }
 
 // writeInternalError logs the real error and tells the client nothing about it.
