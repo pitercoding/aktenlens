@@ -28,14 +28,24 @@ type authService interface {
 
 // Handler exposes the auth use cases over HTTP.
 type Handler struct {
-	svc           authService
-	secureCookies bool
+	svc              authService
+	secureCookies    bool
+	limits           RateLimits
+	trustedProxyHops int
 }
 
 // NewHandler returns the auth handlers. secureCookies must be true in
 // production (HTTPS). Only local HTTP development needs false.
-func NewHandler(svc authService, secureCookies bool) *Handler {
-	return &Handler{svc: svc, secureCookies: secureCookies}
+//
+// Rate limits are ON by default (see DefaultRateLimits): forgetting an option
+// must never leave login open to unlimited guessing.
+func NewHandler(svc authService, secureCookies bool, opts ...HandlerOption) *Handler {
+	h := &Handler{svc: svc, secureCookies: secureCookies, limits: DefaultRateLimits()}
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	return h
 }
 
 // RegisterRoutes attaches the auth routes to mux.
@@ -69,8 +79,17 @@ type accountResponse struct {
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
+	// The address is checked before reading the body, which is cheaper.
+	if !h.allowIP(w, r, h.limits.RegisterIP) {
+		return
+	}
+
 	var req registerRequest
 	if !platform.DecodeJSON(w, r, &req) {
+		return
+	}
+
+	if !h.allowEmail(w, h.limits.RegisterEmail, req.Email) {
 		return
 	}
 
@@ -99,8 +118,16 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
+	if !h.allowIP(w, r, h.limits.LoginIP) {
+		return
+	}
+
 	var req loginRequest
 	if !platform.DecodeJSON(w, r, &req) {
+		return
+	}
+
+	if !h.allowEmail(w, h.limits.LoginEmail, req.Email) {
 		return
 	}
 
