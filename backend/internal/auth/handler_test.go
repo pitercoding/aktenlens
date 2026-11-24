@@ -34,13 +34,13 @@ type env struct {
 }
 
 // newEnv wires the real service (fresh database, fake clock) to the handlers.
-func newEnv(t *testing.T, secureCookies bool) env {
+func newEnv(t *testing.T, secureCookies bool, opts ...auth.HandlerOption) env {
 	t.Helper()
 
 	svc, clock, pool := newTestService(t)
 
 	mux := http.NewServeMux()
-	auth.NewHandler(svc, secureCookies).RegisterRoutes(mux)
+	auth.NewHandler(svc, secureCookies, opts...).RegisterRoutes(mux)
 
 	return env{mux: mux, svc: svc, clock: clock, pool: pool}
 }
