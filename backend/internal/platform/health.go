@@ -34,7 +34,7 @@ type healthzResponse struct {
 // database outage would make the platform restart a healthy API.
 func NewHealthzHandler(version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, healthzResponse{Status: "ok", Version: version})
+		WriteJSON(w, http.StatusOK, healthzResponse{Status: "ok", Version: version})
 	}
 }
 
@@ -49,12 +49,12 @@ func NewReadyzHandler(db Pinger) http.HandlerFunc {
 		if err := db.Ping(ctx); err != nil {
 			log.Printf("readyz: database ping failed: %v", err)
 
-			writeJSON(w, http.StatusServiceUnavailable, healthResponse{
+			WriteJSON(w, http.StatusServiceUnavailable, healthResponse{
 				Status: "unavailable",
 			})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+		WriteJSON(w, http.StatusOK, healthResponse{Status: "ok"})
 	}
 }
