@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,6 +30,15 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Settings first: a wrong value stops the API before it touches the database.
+	cfg, err := loadConfig(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if !cfg.SecureCookies {
+		log.Print("WARNING: COOKIE_SECURE=false, session cookies travel over plain HTTP. Never do this in production.")
+	}
+
 	pool, err := platform.NewDBPool(ctx, os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
@@ -40,8 +48,10 @@ func run() error {
 	// use the database.
 	defer pool.Close()
 
-	mux := http.NewServeMux()
-	platform.RegisterRoutes(mux, pool, version)
+	handler, err := newHandler(cfg, pool, version)
+	if err != nil {
+		return err
+	}
 
 	// PORT is set by hosting platforms (Render); locally it falls back to 8080.
 	addr, err := platform.ListenAddr(os.Getenv("PORT"))
@@ -49,7 +59,7 @@ func run() error {
 		return err
 	}
 
-	srv := platform.NewServer(addr, mux)
+	srv := platform.NewServer(addr, handler)
 
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {

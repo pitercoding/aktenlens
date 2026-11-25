@@ -33,6 +33,9 @@ services:
       # "postgres" and the port is the container port (5432), not the
       # 127.0.0.1:5433 used from your own machine.
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      # The local Compose stack is plain HTTP (no HTTPS), and browsers do not
+      # keep a Secure cookie there. In production this stays unset (= true).
+      COOKIE_SECURE: "false"
     ports:
       # Bound to 127.0.0.1 so only this machine can reach the API.
       - "127.0.0.1:8080:8080"

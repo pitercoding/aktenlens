@@ -4,8 +4,10 @@ SHELL := bash
 
 # Load variables from .env (the leading '-' ignores a missing file, e.g. in CI).
 -include .env
-# Export only DATABASE_URL, so goose can read it. A bare 'export' would export everything.
-export DATABASE_URL
+# Export only what the API and goose read from .env. A bare 'export' would
+# export everything. A variable that is not in .env is exported as an empty
+# string, which the API treats as "use the default".
+export DATABASE_URL COOKIE_SECURE TRUSTED_ORIGINS TRUSTED_PROXY_HOPS
 
 
 APP_NAME := aktenlens-api
